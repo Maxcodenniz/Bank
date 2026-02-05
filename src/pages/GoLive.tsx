@@ -22,6 +22,8 @@ import {
   Music,
 } from 'lucide-react';
 
+const LIVE_LEAVE_MESSAGE = 'You must end the live event before leaving this page. Use "End stream" in the studio.';
+
 // Generate UUID v4
 const generateUUID = () =>
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -578,6 +580,76 @@ const GoLive: React.FC = () => {
       clearInterval(refreshInterval);
     };
   }, [currentEvent?.id, activeTab, currentEvent?.status, currentEvent?.start_time]);
+
+  // Block leaving the page while live: use isStreaming (set as soon as they go live) OR DB status
+  const isLive = !!currentEvent && (currentEvent.status === 'live' || isStreaming);
+
+  // Keep currentEvent in sync with DB (e.g. status -> 'live') so isLive stays correct
+  useEffect(() => {
+    if (!currentEvent?.id) return;
+    const channel = supabase
+      .channel(`golive-event-${currentEvent.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'events', filter: `id=eq.${currentEvent.id}` },
+        (payload) => {
+          const newData = payload.new as any;
+          setCurrentEvent((prev: any) => {
+            if (!prev) return prev;
+            const next = { ...prev, ...newData };
+            setContextEvent(next);
+            return next;
+          });
+        }
+      )
+      .subscribe();
+    return () => { channel.unsubscribe(); };
+  }, [currentEvent?.id, setContextEvent]);
+
+  useEffect(() => {
+    if (!isLive) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = LIVE_LEAVE_MESSAGE;
+      return LIVE_LEAVE_MESSAGE;
+    };
+
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.pathname + window.location.search);
+      window.alert(LIVE_LEAVE_MESSAGE);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isLive]);
+
+  // Block in-app navigation when live: intercept any internal link click (capture phase)
+  useEffect(() => {
+    if (!isLive) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a[href]');
+      if (!anchor) return;
+      const href = (anchor.getAttribute('href') ?? '').trim();
+      if (!href || href === '#' || href.startsWith('javascript:')) return;
+      const isInternal = href.startsWith('/') || href.startsWith(window.location.origin);
+      if (isInternal) {
+        e.preventDefault();
+        e.stopPropagation();
+        window.alert(LIVE_LEAVE_MESSAGE);
+      }
+    };
+
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, [isLive]);
 
   // Loading UI
   if (loading) {

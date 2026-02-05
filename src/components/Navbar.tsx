@@ -14,6 +14,7 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const { user, userProfile, signOut } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showCategoriesDropdown, setShowCategoriesDropdown] = useState(false);
@@ -27,6 +28,7 @@ const Navbar: React.FC = () => {
   const categoriesDropdownRef = useRef<HTMLDivElement>(null);
   const artistToolsDropdownRef = useRef<HTMLDivElement>(null);
   const adminToolsDropdownRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -240,25 +242,23 @@ const Navbar: React.FC = () => {
       if (adminToolsDropdownRef.current && !adminToolsDropdownRef.current.contains(target)) {
         setShowAdminToolsMenu(false);
       }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(target)) {
+        setShowProfileMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Main navigation items (always visible)
+  // Main navigation items (Help and Favorites moved to profile menu for smaller screens)
   const mainNavItems = [
     { to: '/', label: 'Home' },
     { to: '/live-events', label: 'Live Events', icon: Radio },
     { to: '/upcoming-concerts', label: 'Upcoming Concerts', icon: Calendar },
-    { to: '/categories', label: 'Categories' },
-    ...(user && !isAdmin && !isSuperAdmin ? [
-      { to: '/favorites', label: 'Favorites', icon: Heart },
-      { to: `/artist/${user.id}`, label: 'My Profile', icon: UserCircle }
-    ] : []),
-    ...(!isAdmin && !isSuperAdmin ? [
-      { to: '/help', label: 'Help', icon: HelpCircle }
-    ] : [])
+    { to: '/categories', label: 'Categories' }
   ];
+
+  const desktopMainNavItems = mainNavItems;
 
   // Artist-specific items
   const artistNavItems = [
@@ -323,12 +323,12 @@ const Navbar: React.FC = () => {
           </Link>
         </div>
 
-        {/* Navigation Container - Takes remaining space */}
-        <div className="flex-1 max-w-7xl px-6 ml-4">
-          <div className="flex items-center justify-between gap-4">
-            {/* Desktop Navigation - Centered */}
-            <div className="hidden lg:flex items-center space-x-2 flex-1 justify-center px-4">
-            {mainNavItems.map(item => (
+        {/* Navigation Container - Takes remaining space; min-w-0 allows shrinking */}
+        <div className="flex-1 min-w-0 max-w-7xl px-6 ml-8 xl:ml-10">
+          <div className="flex items-center justify-between gap-4 min-w-0">
+            {/* Desktop Navigation - Centered; no scroll (Favorites/My Profile in More dropdown) */}
+            <div className="hidden xl:flex items-center space-x-2 flex-1 min-w-0 px-4 justify-center">
+            {desktopMainNavItems.map(item => (
               item.label === 'Categories' ? (
                 <div 
                   key={item.to}
@@ -574,25 +574,29 @@ const Navbar: React.FC = () => {
             )}
             </div>
 
-            {/* Search, Auth, and Visitor Counter - Fixed on right */}
-            <div className="flex items-center space-x-2 flex-shrink-0 ml-auto">
-            <div className="relative hidden md:block">
-              <form onSubmit={handleSearchSubmit} className="relative">
+            {/* Search, Auth, and Visitor Counter - flex-shrink-0 so this block never shrinks and center nav scrolls instead of overlapping */}
+            <div className="flex items-center space-x-2 ml-auto flex-shrink-0">
+            <div className="relative hidden md:block min-w-0 flex-shrink">
+              <form onSubmit={handleSearchSubmit} className="relative min-w-0">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer hover:text-purple-400 transition-colors z-10" size={18} onClick={handleSearchSubmit} />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={handleSearch}
                   onKeyPress={handleSearchKeyPress}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
                   placeholder="Search..."
-                  className="pl-10 pr-4 py-2 bg-gradient-to-br from-gray-800/80 to-gray-700/60 backdrop-blur-sm border border-white/10 rounded-full text-white text-sm w-48 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500/50 transition-all shadow-xl hover:shadow-2xl hover:shadow-purple-500/20"
+                  className={`pl-10 pr-4 py-2 bg-gradient-to-br from-gray-800/80 to-gray-700/60 backdrop-blur-sm border border-white/10 rounded-full text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500/50 transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-purple-500/20 ${
+                    searchFocused || searchQuery.length > 0 ? 'w-48 min-w-[8rem] max-w-[14rem]' : 'w-20 min-w-[5rem]'
+                  }`}
                 />
               </form>
             </div>
 
             {/* Visitor Counter */}
             {visitorCounterVisible && (
-              <div className="hidden lg:block">
+              <div className="hidden xl:block flex-shrink-0">
                 <VisitorCounter />
               </div>
             )}
@@ -609,7 +613,7 @@ const Navbar: React.FC = () => {
             )}
 
             {user ? (
-              <div className="relative flex-shrink-0">
+              <div ref={profileMenuRef} className="relative flex-shrink-0">
                 <button
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
                   className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-300 group"
@@ -649,6 +653,36 @@ const Navbar: React.FC = () => {
                       </div>
                       <span className="font-semibold">My Profile</span>
                     </Link>
+                    {!isAdmin && !isSuperAdmin && (
+                      <>
+                        <Link
+                          to="/favorites"
+                          className="flex items-center px-4 py-3 text-white hover:bg-gradient-to-r hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 mx-2 rounded-xl group"
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            window.scrollTo(0, 0);
+                          }}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-pink-500/20 flex items-center justify-center mr-3 group-hover:bg-pink-500/30 transition-colors">
+                            <Heart size={16} className="text-pink-400" />
+                          </div>
+                          <span className="font-semibold">Favorites</span>
+                        </Link>
+                        <Link
+                          to="/help"
+                          className="flex items-center px-4 py-3 text-white hover:bg-gradient-to-r hover:from-purple-600/30 hover:to-pink-600/30 transition-all duration-300 mx-2 rounded-xl group"
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            window.scrollTo(0, 0);
+                          }}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center mr-3 group-hover:bg-amber-500/30 transition-colors">
+                            <HelpCircle size={16} className="text-amber-400" />
+                          </div>
+                          <span className="font-semibold">Help</span>
+                        </Link>
+                      </>
+                    )}
                     {isArtist || isAdmin ? (
                       <Link
                         to="/dashboard"
@@ -706,10 +740,10 @@ const Navbar: React.FC = () => {
               </Link>
             )}
 
-            {/* Mobile Menu Button */}
+            {/* Mobile Menu Button (xl so it shows when desktop nav is hidden, keeping right buttons visible) */}
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="lg:hidden w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all duration-300 flex items-center justify-center group flex-shrink-0"
+              className="xl:hidden w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all duration-300 flex items-center justify-center group flex-shrink-0"
             >
               {showMobileMenu ? <X size={20} className="group-hover:scale-110 transition-transform" /> : <Menu size={20} className="group-hover:scale-110 transition-transform" />}
             </button>
@@ -718,9 +752,9 @@ const Navbar: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Navigation */}
+      {/* Mobile Navigation (xl so it matches hamburger visibility) */}
       {showMobileMenu && (
-        <div className="lg:hidden mt-4 py-4 border-t border-white/10 animate-in slide-in-from-top duration-300 px-4 bg-gradient-to-b from-gray-900/95 via-gray-900/90 to-gray-900/95 backdrop-blur-xl relative z-[60] max-h-[calc(100vh-80px)] overflow-y-auto">
+        <div className="xl:hidden mt-4 py-4 border-t border-white/10 animate-in slide-in-from-top duration-300 px-4 bg-gradient-to-b from-gray-900/95 via-gray-900/90 to-gray-900/95 backdrop-blur-xl relative z-[60] max-h-[calc(100vh-80px)] overflow-y-auto">
           <div className="max-w-7xl mx-auto">
             <div className="flex flex-col space-y-4">
               {/* Mobile Search */}

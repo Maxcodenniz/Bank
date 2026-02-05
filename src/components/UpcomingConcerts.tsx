@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Trophy, Clock, Play, CreditCard, Info, ShoppingCart } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Concert, Artist } from '../types';
 import SectionHeader from './SectionHeader';
 import { supabase } from '../lib/supabaseClient';
@@ -80,6 +80,7 @@ const useCountdown = (targetDate: string): TimeLeft => {
 
 // Enhanced ConcertCard component with countdown timer and all buttons
 const ConcertCard: React.FC<{ concert: Concert; artist: Artist }> = ({ concert, artist }) => {
+  const navigate = useNavigate();
   const { user } = useStore();
   const { addItem, isInCart, guestEmail } = useCartStore();
   const timeLeft = useCountdown(concert.date);
@@ -105,9 +106,8 @@ const ConcertCard: React.FC<{ concert: Concert; artist: Artist }> = ({ concert, 
   };
 
   const handleWatchClick = () => {
-    // Always navigate to watch page - let the Watch page handle access control
-    // The Watch page will check for tickets and show appropriate UI based on event status
-    window.location.href = `/watch/${concert.id}`;
+    // Client-side navigation so the app doesn't reload and the loading screen doesn't show
+    navigate(`/watch/${concert.id}`);
   };
 
   const handleAddToCart = async () => {

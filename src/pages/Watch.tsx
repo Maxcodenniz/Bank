@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useStreaming } from '../contexts/StreamingContext';
 import AgoraPlayer from '../components/AgoraPlayer';
 import { generateToken } from '../lib/agoraClient';
-import { Users, Volume2, VolumeX, Play, Pause, X, Maximize, Minimize, Settings, Heart } from 'lucide-react';
+import { Users, Volume2, VolumeX, Play, Pause, X, Maximize, Minimize, Settings, Heart, Calendar, Clock, User, ArrowLeft } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useCartStore } from '../store/useCartStore';
 import { hasActiveTicket } from '../utils/ticketUtils';
@@ -20,6 +20,7 @@ type EventRecord = {
   image_url?: string | null;
   viewer_count?: number | null;
   like_count?: number | null;
+  description?: string | null;
   profiles?: { username?: string | null; full_name?: string | null } | null;
 };
 
@@ -117,6 +118,7 @@ const Watch: React.FC = () => {
               price,
               image_url,
               viewer_count,
+              description,
               profiles:artist_id ( username, full_name )
             `
           )
@@ -686,19 +688,78 @@ const Watch: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="container mx-auto px-4 py-8">
-          <div className="bg-gray-800 rounded-xl p-6 text-center">
-            <h1 className="text-2xl md:text-3xl font-bold text-white">{event.title}</h1>
-            <p className="text-gray-400 mt-1">{event.profiles?.username || 'Unknown Artist'}</p>
-            <div className="mt-4 inline-flex items-center bg-gray-700/50 text-gray-300 px-4 py-2 rounded-full text-sm font-semibold">
-              {event.status === 'scheduled' ? 'Scheduled' : isEventOver ? 'Stream has ended' : event.status === 'ended' ? 'Ended' : 'Not live'}
+        <div className="container mx-auto px-4 py-8 max-w-2xl">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-gray-800/95 to-gray-900/95 shadow-2xl backdrop-blur-sm">
+            {/* Accent gradient bar */}
+            <div className="h-1 w-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-amber-500" />
+            <div className="p-8 md:p-10 text-center">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="absolute top-6 left-6 inline-flex items-center gap-2 rounded-lg bg-white/10 hover:bg-white/20 text-gray-200 hover:text-white px-4 py-2.5 text-sm font-medium transition-all border border-white/10"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Return
+              </button>
+              <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight drop-shadow-sm">
+                {event.title}
+              </h1>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <User className="h-5 w-5 text-violet-400 shrink-0" aria-hidden />
+                <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-violet-300 to-fuchsia-300 bg-clip-text text-transparent">
+                  {event.profiles?.username || event.profiles?.full_name || 'Unknown Artist'}
+                </span>
+              </div>
+              <div className="mt-5 flex justify-center">
+                {event.status === 'scheduled' && (
+                  <span className="inline-flex items-center rounded-full bg-blue-500/20 text-blue-300 px-4 py-2 text-sm font-semibold ring-1 ring-blue-400/30">
+                    Scheduled
+                  </span>
+                )}
+                {isEventOver && (
+                  <span className="inline-flex items-center rounded-full bg-gray-500/20 text-gray-300 px-4 py-2 text-sm font-semibold ring-1 ring-gray-400/30">
+                    Stream has ended
+                  </span>
+                )}
+                {event.status === 'ended' && !isEventOver && (
+                  <span className="inline-flex items-center rounded-full bg-gray-500/20 text-gray-300 px-4 py-2 text-sm font-semibold ring-1 ring-gray-400/30">
+                    Ended
+                  </span>
+                )}
+                {event.status !== 'scheduled' && event.status !== 'ended' && !isEventOver && (
+                  <span className="inline-flex items-center rounded-full bg-amber-500/20 text-amber-300 px-4 py-2 text-sm font-semibold ring-1 ring-amber-400/30">
+                    Not live
+                  </span>
+                )}
+              </div>
+              {event.start_time && (
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-6 text-base md:text-lg">
+                  <span className="inline-flex items-center gap-2 rounded-lg bg-violet-500/15 px-4 py-2.5 text-violet-200">
+                    <Calendar className="h-5 w-5 text-violet-400" aria-hidden />
+                    {new Date(event.start_time).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-lg bg-fuchsia-500/15 px-4 py-2.5 text-fuchsia-200">
+                    <Clock className="h-5 w-5 text-fuchsia-400" aria-hidden />
+                    {new Date(event.start_time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              {event.duration != null && event.duration > 0 && (
+                <p className="mt-2 text-sm text-gray-400">
+                  Duration: <span className="font-semibold text-gray-300">{event.duration} min</span>
+                </p>
+              )}
+              {(event.description?.trim() ?? '') !== '' && (
+                <div className="mt-6 text-left rounded-xl bg-white/5 border border-white/10 p-4 md:p-5">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-violet-300 mb-2">
+                    About this event
+                  </h2>
+                  <p className="text-gray-200 leading-relaxed">
+                    {event.description}
+                  </p>
+                </div>
+              )}
             </div>
-            {event.start_time && (
-              <p className="text-gray-400 text-sm mt-3">{new Date(event.start_time).toLocaleString()}</p>
-            )}
-            {event.description && (
-              <p className="text-gray-300 mt-4">{event.description}</p>
-            )}
           </div>
         </div>
       )}

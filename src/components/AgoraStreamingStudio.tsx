@@ -435,6 +435,26 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
     };
   }, [localTracks, cameraInitialized, isStreaming]);
 
+  // Ensure video always fills container when Agora injects or re-injects the video element
+  useEffect(() => {
+    const container = videoRef.current;
+    if (!container || !localTracks?.[1]) return;
+    const applyFill = (videoEl: HTMLVideoElement) => {
+      videoEl.style.position = 'absolute';
+      videoEl.style.inset = '0';
+      videoEl.style.width = '100%';
+      videoEl.style.height = '100%';
+      videoEl.style.objectFit = 'cover';
+      videoEl.style.display = 'block';
+    };
+    const observer = new MutationObserver(() => {
+      container.querySelectorAll('video').forEach(applyFill);
+    });
+    observer.observe(container, { childList: true, subtree: true });
+    container.querySelectorAll('video').forEach(applyFill);
+    return () => observer.disconnect();
+  }, [localTracks, cameraInitialized]);
+
   const toggleCameraMute = useCallback(async () => {
     if (!localTracks?.[1]) return;
     try {
@@ -1397,28 +1417,24 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
       // Play video into container
       if (videoRef.current) {
         try {
-          // Ensure the container is ready
           const container = videoRef.current;
-          
-          // Small delay to ensure DOM is ready
+          const applyVideoFill = (el: HTMLVideoElement) => {
+            el.style.position = 'absolute';
+            el.style.inset = '0';
+            el.style.width = '100%';
+            el.style.height = '100%';
+            el.style.objectFit = 'cover';
+            el.style.display = 'block';
+          };
           setTimeout(() => {
             if (container && tracks[1]) {
               tracks[1].play(container);
-              console.log('✅ Local video preview started');
-              
-              // Force video element styling if Agora creates one
-              setTimeout(() => {
-                const videoElement = container.querySelector('video');
-                if (videoElement) {
-                  videoElement.style.width = '100%';
-                  videoElement.style.height = '100%';
-                  videoElement.style.objectFit = 'cover';
-                  videoElement.style.display = 'block';
-                  console.log('✅ Video element styled');
-                } else {
-                  console.warn('⚠️ Video element not found in container');
-                }
-              }, 100);
+              // Apply fill immediately and again after SDK may have created the video
+              [0, 50, 150, 300].forEach((ms) => {
+                setTimeout(() => {
+                  container.querySelectorAll('video').forEach(applyVideoFill);
+                }, ms);
+              });
             }
           }, 50);
         } catch (e) { 
@@ -1792,7 +1808,7 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
                 {!isFullscreen && isStreaming && (
                   <div className="absolute -inset-1 bg-gradient-to-r from-red-600 via-pink-600 to-red-600 rounded-2xl opacity-20 blur-xl animate-pulse -z-10"></div>
                 )}
-                <div ref={videoRef} className="w-full h-full agora-video-player" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }} />
+                <div ref={videoRef} className="w-full h-full agora-video-player" style={{ position: 'relative', minHeight: 0 }} />
                 {!cameraInitialized && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900 z-10">
                     <div className="text-center text-gray-400">

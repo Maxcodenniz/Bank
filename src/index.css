@@ -3,12 +3,26 @@
 @tailwind utilities;
 
 /* Ensure Agora video elements are properly styled */
-/* For streamers (cover to fill preview) */
-.agora-video-player video {
+/* For streamers (cover to fill preview - always fill container, no letterboxing) */
+.agora-video-player {
+  overflow: hidden !important;
+}
+.agora-video-player video,
+.agora-video-player > div video {
+  position: absolute !important;
+  inset: 0 !important;
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
   display: block !important;
+  object-position: center !important;
+}
+/* If SDK injects a wrapper div, make it fill too */
+.agora-video-player > div {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* For viewers (contain to show full video without cropping) */
