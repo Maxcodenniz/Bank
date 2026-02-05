@@ -1,0 +1,273 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ensure Agora video elements are properly styled */
+/* For streamers (cover to fill preview) */
+.agora-video-player video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+/* For viewers (contain to show full video without cropping) */
+.agora-viewer-player video,
+.agora-viewer-player > video,
+div.agora-viewer-player video,
+.agora-viewer-player video[class],
+video[class*="agora"] {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+  object-position: center !important;
+  position: relative !important;
+}
+
+/* Also target any video inside the container more broadly */
+div[class*="agora-viewer"] video,
+div[class*="agora-viewer"] > video {
+  object-fit: contain !important;
+  object-position: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+/* Live Studio fullscreen: video fills whole screen; camera/mic overlay on hover or click */
+.studio-fullscreen-container:fullscreen,
+.studio-fullscreen-container:-webkit-full-screen,
+.studio-fullscreen-container:-ms-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  background: #000;
+}
+
+/* Set dark background for the entire app */
+body {
+  @apply bg-gray-800 text-gray-100;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-600 rounded-full hover:bg-gray-500;
+}
+
+/* Horizontal scrollbar styling for admin tables */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 10px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  @apply bg-gray-800/50 rounded-lg;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  @apply bg-purple-500/50 rounded-lg hover:bg-purple-500/70;
+}
+
+/* Thin scrollbar variant */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  @apply bg-gray-800/30 rounded-lg;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply bg-purple-500/50 rounded-lg hover:bg-purple-500/70;
+}
+
+/* Custom scrollbar for dropdowns */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1f2937;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Netflix-style logo grid */
+.logo-grid {
+  @apply bg-gradient-to-b from-purple-600/20 to-transparent;
+  background-size: 60px 60px;
+  background-image: 
+    linear-gradient(to right, rgba(107, 33, 168, 0.2) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(107, 33, 168, 0.2) 1px, transparent 1px);
+}
+
+/* Loading screen animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-40px) rotate(180deg);
+    opacity: 1;
+  }
+}
+
+/* Slide down animation for notifications */
+@keyframes slide-down {
+  0% {
+    transform: translate(-50%, -100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s ease-out;
+}
+
+.animate-float {
+  animation: float 10s ease-in-out infinite;
+}
+
+/* Enhanced cinematic text effects */
+.text-cinematic {
+  text-shadow: 
+    0 0 30px rgba(168, 85, 247, 0.8),
+    0 0 60px rgba(168, 85, 247, 0.6),
+    0 0 90px rgba(168, 85, 247, 0.4),
+    0 6px 12px rgba(0, 0, 0, 0.9);
+}
+
+/* Enhanced loading bar glow effect */
+.loading-glow {
+  box-shadow: 
+    0 0 30px rgba(168, 85, 247, 1),
+    0 0 60px rgba(168, 85, 247, 0.8),
+    0 0 90px rgba(168, 85, 247, 0.6),
+    inset 0 0 30px rgba(255, 255, 255, 0.3);
+}
+
+/* Prevent text selection during loading */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Smooth transitions for all elements */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Enhanced focus states for accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(168, 85, 247, 0.8);
+  outline-offset: 2px;
+}
+
+/* Loading screen specific styles */
+.loading-screen {
+  background: radial-gradient(ellipse at center, rgba(168, 85, 247, 0.2) 0%, rgba(0, 0, 0, 1) 70%);
+}
+
+/* Particle animation variants */
+.particle-1 { animation-duration: 6s; }
+.particle-2 { animation-duration: 8s; }
+.particle-3 { animation-duration: 10s; }
+
+/* Enhanced logo pulse effect */
+@keyframes logo-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1) drop-shadow(0 0 30px rgba(168, 85, 247, 0.6));
+  }
+  50% {
+    transform: scale(1.1);
+    filter: brightness(1.4) drop-shadow(0 0 60px rgba(168, 85, 247, 1));
+  }
+}
+
+.logo-pulse {
+  animation: logo-pulse 5s ease-in-out infinite;
+}
+
+/* Enhanced progress bar shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: calc(400px + 100%) 0;
+  }
+}
+
+.progress-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.5),
+    transparent
+  );
+  background-size: 400px 100%;
+  animation: shimmer 3s infinite;
+}
+
+/* Enhanced drop shadow for text */
+.drop-shadow-2xl {
+  filter: drop-shadow(0 25px 25px rgb(0 0 0 / 0.15)) drop-shadow(0 0 30px rgba(168, 85, 247, 0.4));
+}
+
+/* Backdrop blur support */
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+}
+
+/* Enhanced loading screen fade transitions */
+.loading-screen {
+  transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1), 
+              transform 1000ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Fade in animation for artist cards */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+  opacity: 0;
+}

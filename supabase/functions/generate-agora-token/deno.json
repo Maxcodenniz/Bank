@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "agora-token": "npm:agora-token@2.0.5"
+  }
+}
