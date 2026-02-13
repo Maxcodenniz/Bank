@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, X, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
@@ -23,6 +23,22 @@ const NotificationsPanel: React.FC = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showPanel, setShowPanel] = useState(false);
   const [loading, setLoading] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Close panel when clicking outside (anywhere except the panel or the bell button)
+  useEffect(() => {
+    if (!showPanel) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setShowPanel(false);
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPanel]);
 
   // Fetch notifications from database
   useEffect(() => {
@@ -202,6 +218,7 @@ const NotificationsPanel: React.FC = () => {
   return (
     <div className="relative">
       <button
+        ref={triggerRef}
         onClick={() => setShowPanel(!showPanel)}
         className="relative p-2 text-white hover:text-yellow-400 transition-colors"
       >
@@ -219,7 +236,11 @@ const NotificationsPanel: React.FC = () => {
             className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
             onClick={() => setShowPanel(false)}
           />
-          <div className="fixed left-0 top-0 md:absolute md:right-0 md:top-full md:mt-2 w-full max-w-full md:w-96 h-full md:h-auto md:max-h-[80vh] bg-gray-900/95 backdrop-blur-xl shadow-2xl z-[70] overflow-hidden flex flex-col md:border md:border-gray-700/50 md:rounded-lg" style={{ maxWidth: '100vw', boxSizing: 'border-box' }}>
+          <div
+            ref={panelRef}
+            className="fixed inset-x-0 top-0 md:inset-auto md:right-0 md:top-full md:mt-2 w-full md:w-96 md:min-w-0 h-[100dvh] md:h-auto md:max-h-[min(28rem,calc(100vh-7rem))] max-w-[100vw] bg-gray-900/95 backdrop-blur-xl shadow-2xl z-[70] overflow-hidden flex flex-col md:border md:border-gray-700/50 md:rounded-lg"
+            style={{ boxSizing: 'border-box' }}
+          >
             <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-700/50 bg-gray-800/50 flex-shrink-0 min-w-0">
               <h3 className="text-base md:text-lg font-bold text-white truncate flex-1 min-w-0">Notifications</h3>
               <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
@@ -253,7 +274,7 @@ const NotificationsPanel: React.FC = () => {
               </div>
             </div>
 
-            <div className="overflow-y-auto flex-1 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', minHeight: 0 }}>
+            <div className="overflow-y-auto overflow-x-hidden flex-1 min-h-0 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
               {loading ? (
                 <div className="flex justify-center p-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
@@ -264,32 +285,31 @@ const NotificationsPanel: React.FC = () => {
                   <p>No notifications yet</p>
                 </div>
               ) : (
-                <div className="pb-4">
+                <div className="pb-4 min-w-0 w-full">
                   {notifications.map(notification => (
                     <div
                       key={notification.id}
-                      className={`p-4 border-b border-gray-700/50 hover:bg-gray-700/50 transition-colors group ${
+                      className={`p-4 border-b border-gray-700/50 hover:bg-gray-700/50 transition-colors group min-w-0 w-full ${
                         !notification.read ? 'bg-purple-900/20' : ''
                       }`}
-                      style={{ maxWidth: '100%', boxSizing: 'border-box' }}
                     >
-                      <div className="flex items-start justify-between gap-3 min-w-0">
-                        <div 
-                          className="flex-1 cursor-pointer min-w-0 overflow-hidden"
+                      <div className="flex items-start gap-3 min-w-0 w-full">
+                        <div
+                          className="flex-1 cursor-pointer min-w-0 overflow-x-hidden"
                           onClick={() => handleNotificationClick(notification)}
                         >
                           <div className="flex items-start gap-2 mb-1 min-w-0">
-                            <h4 className="font-semibold text-white text-base leading-tight break-words min-w-0 flex-1">
+                            <h4 className="font-semibold text-white text-base leading-tight break-words min-w-0">
                               {notification.title}
                             </h4>
                             {!notification.read && (
-                              <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0"></div>
+                              <div className="w-2 h-2 bg-purple-500 rounded-full mt-2 flex-shrink-0" aria-hidden />
                             )}
                           </div>
-                          <p className="text-sm text-gray-300 mb-2 leading-relaxed break-words overflow-wrap-anywhere">
+                          <p className="text-sm text-gray-300 mb-2 leading-relaxed break-words hyphens-auto">
                             {notification.message}
                           </p>
-                          <p className="text-xs text-gray-500 break-words">
+                          <p className="text-xs text-gray-500">
                             {formatTime(notification.created_at)}
                           </p>
                         </div>

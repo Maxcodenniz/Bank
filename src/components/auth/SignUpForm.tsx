@@ -1,7 +1,45 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
-import { Lock, Mail, User, UserCircle, Music, Mic, Search, Eye, EyeOff, X, Phone } from 'lucide-react';
+import { Lock, Mail, User, UserCircle, Music, Mic, Search, Eye, EyeOff, X, Phone, Plus } from 'lucide-react';
+
+/** Levenshtein distance for spelling suggestion */
+function levenshtein(a: string, b: string): number {
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b[i - 1] === a[j - 1]) matrix[i][j] = matrix[i - 1][j - 1];
+      else matrix[i][j] = 1 + Math.min(matrix[i - 1][j - 1], matrix[i][j - 1], matrix[i - 1][j]);
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function getClosestGenreSuggestion(query: string, genreNames: string[]): string | null {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2 || genreNames.length === 0) return null;
+  let best: string | null = null;
+  let bestDist = Infinity;
+  for (const name of genreNames) {
+    const d = levenshtein(q, name.toLowerCase());
+    if (d < bestDist && d <= Math.max(3, Math.ceil(name.length / 2))) {
+      bestDist = d;
+      best = name;
+    }
+  }
+  return best;
+}
+
+function capitalizeGenreName(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
 import { COUNTRIES, filterCountries } from '../../utils/countries';
 import { getRegionForCountry } from '../../utils/countryToRegion';
 import PhoneInput, { type PhoneValue } from '../PhoneInput';
@@ -14,6 +52,8 @@ const SignUpForm: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [genres, setGenres] = useState<any[]>([]);
+  const [genreSearchQuery, setGenreSearchQuery] = useState('');
+  const [addingGenre, setAddingGenre] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -101,6 +141,34 @@ const SignUpForm: React.FC = () => {
       setGenres(data || []);
     } catch (err) {
       console.error('Error fetching genres:', err);
+    }
+  };
+
+  const addNewGenre = async (rawName: string) => {
+    const name = capitalizeGenreName(rawName);
+    if (!name) return;
+    const exists = genres.some((g) => g.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      if (!formData.selectedGenres.includes(name)) {
+        setFormData({ ...formData, selectedGenres: [...formData.selectedGenres, name] });
+      }
+      setGenreSearchQuery('');
+      return;
+    }
+    setAddingGenre(true);
+    try {
+      const { error } = await supabase.from('genres').insert({ name, category: formData.artistType });
+      if (error) throw error;
+      await fetchGenres();
+      if (!formData.selectedGenres.includes(name)) {
+        setFormData({ ...formData, selectedGenres: [...formData.selectedGenres, name] });
+      }
+      setGenreSearchQuery('');
+    } catch (err) {
+      console.error('Error adding genre:', err);
+      setError(err instanceof Error ? err.message : 'Could not add genre. It may already exist.');
+    } finally {
+      setAddingGenre(false);
     }
   };
 
@@ -602,30 +670,106 @@ const SignUpForm: React.FC = () => {
 
             <div>
               <label className="block text-gray-300 mb-2">Genres</label>
-              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                {genres.map((genre) => (
-                  <button
-                    key={genre.id}
-                    type="button"
-                    onClick={() => {
-                      const isSelected = formData.selectedGenres.includes(genre.name);
-                      setFormData({
-                        ...formData,
-                        selectedGenres: isSelected
-                          ? formData.selectedGenres.filter(g => g !== genre.name)
-                          : [...formData.selectedGenres, genre.name]
-                      });
-                    }}
-                    className={`p-2 rounded-lg text-sm transition-colors ${
-                      formData.selectedGenres.includes(genre.name)
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                    }`}
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <input
+                  type="text"
+                  value={genreSearchQuery}
+                  onChange={(e) => setGenreSearchQuery(e.target.value)}
+                  placeholder="Search or add genre..."
+                  className="w-full pl-9 pr-4 py-2 bg-gray-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                />
+              </div>
+              {genreSearchQuery.trim().length >= 2 && (() => {
+                const q = genreSearchQuery.trim().toLowerCase();
+                const filtered = genres.filter((g) => g.name.toLowerCase().includes(q));
+                const exactMatch = genres.find((g) => g.name.toLowerCase() === q);
+                const suggestion = getClosestGenreSuggestion(genreSearchQuery.trim(), genres.map((g) => g.name));
+                const canAddNew = !exactMatch && !genres.some((g) => g.name.toLowerCase() === capitalizeGenreName(genreSearchQuery).toLowerCase());
+                return (
+                  <div className="space-y-2 mb-2">
+                    {filtered.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                        {filtered.map((genre) => {
+                          const isSelected = formData.selectedGenres.includes(genre.name);
+                          return (
+                            <button
+                              key={genre.id}
+                              type="button"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  selectedGenres: isSelected
+                                    ? formData.selectedGenres.filter((g) => g !== genre.name)
+                                    : [...formData.selectedGenres, genre.name]
+                                });
+                              }}
+                              className={`p-2 rounded-lg text-sm transition-colors text-left ${
+                                isSelected ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                              }`}
+                            >
+                              {genre.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : suggestion ? (
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="text-gray-400">Did you mean:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!formData.selectedGenres.includes(suggestion)) {
+                              setFormData({ ...formData, selectedGenres: [...formData.selectedGenres, suggestion] });
+                            }
+                            setGenreSearchQuery('');
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-purple-600/80 hover:bg-purple-600 text-white font-medium"
+                        >
+                          {suggestion}
+                        </button>
+                        {canAddNew && (
+                          <span className="text-gray-500">or add new below</span>
+                        )}
+                      </div>
+                    ) : null}
+                    {canAddNew && (
+                      <button
+                        type="button"
+                        onClick={() => addNewGenre(genreSearchQuery)}
+                        disabled={addingGenre || !genreSearchQuery.trim()}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 text-gray-300 hover:text-white text-sm transition-colors disabled:opacity-50"
+                      >
+                        <Plus className="w-4 h-4" />
+                        {addingGenre ? 'Adding...' : `Add "${capitalizeGenreName(genreSearchQuery)}" as new genre`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="flex flex-wrap gap-2">
+                {formData.selectedGenres.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-600/80 text-white text-sm"
                   >
-                    {genre.name}
-                  </button>
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData({ ...formData, selectedGenres: formData.selectedGenres.filter((g) => g !== name) })
+                      }
+                      className="hover:bg-white/20 rounded p-0.5"
+                      aria-label={`Remove ${name}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
                 ))}
               </div>
+              {formData.selectedGenres.length === 0 && !genreSearchQuery && (
+                <p className="text-gray-500 text-xs mt-1">Search above or pick from results. You can add a new genre if it’s not listed.</p>
+              )}
             </div>
 
             <div>

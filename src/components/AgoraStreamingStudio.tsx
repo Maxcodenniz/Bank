@@ -8,7 +8,7 @@ import { useStreaming } from '../contexts/StreamingContext';
 import { supabase } from '../lib/supabaseClient';
 import CameraStats from './CameraStats';
 import CameraSelector from './CameraSelector';
-import { MessageCircle, Send, X, Image, Mic, MicOff, Smile, Reply, Trash2, Users, Maximize2, Minimize2, CheckCircle, Video, VideoOff, BarChart, Circle, Square } from 'lucide-react';
+import { MessageCircle, Send, X, Image, Mic, MicOff, Smile, Reply, Trash2, Users, Maximize2, Minimize2, CheckCircle, Video, VideoOff, BarChart, Circle, Square, Heart } from 'lucide-react';
 
 const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any }> = ({ concert }) => {
   const { userProfile, user } = useStore();
@@ -35,6 +35,7 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [selectedMicrophoneId, setSelectedMicrophoneId] = useState<string>('');
   const [viewerCount, setViewerCount] = useState(0);
+  const [likeCount, setLikeCount] = useState(0);
   const [streamingUid, setStreamingUid] = useState<number | null>(null);
   const [showChat, setShowChat] = useState(true);
   const [chatEnabled, setChatEnabled] = useState(true);
@@ -277,29 +278,29 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
   useEffect(() => {
     if (!concert?.id) return;
 
-    // Fetch initial viewer count
-    const fetchViewerCount = async () => {
+    // Fetch initial viewer count and like count
+    const fetchEventStats = async () => {
       try {
         const { data, error } = await supabase
           .from('events')
-          .select('viewer_count')
+          .select('viewer_count, like_count')
           .eq('id', concert.id)
           .single();
 
         if (!error && data) {
-          setViewerCount(data.viewer_count || 0);
-          console.log('📊 Initial viewer count:', data.viewer_count);
+          setViewerCount(data.viewer_count ?? 0);
+          setLikeCount(data.like_count ?? 0);
         }
       } catch (err) {
-        console.warn('Error fetching viewer count:', err);
+        console.warn('Error fetching event stats:', err);
       }
     };
 
-    fetchViewerCount();
+    fetchEventStats();
 
-    // Set up real-time subscription
+    // Real-time subscription: viewer_count and like_count broadcast to all clients (viewers + streamer)
     const channel = supabase
-      .channel(`event-viewer-count-${concert.id}`)
+      .channel(`event-stats-${concert.id}`)
       .on(
         'postgres_changes',
         {
@@ -309,18 +310,20 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
           filter: `id=eq.${concert.id}`,
         },
         (payload) => {
-          const newData = payload.new as any;
+          const newData = payload.new as { viewer_count?: number | null; like_count?: number | null };
           if (newData.viewer_count !== undefined && newData.viewer_count !== null) {
             setViewerCount(newData.viewer_count);
-            console.log('📊 Viewer count updated from database:', newData.viewer_count);
+          }
+          if (newData.like_count !== undefined && newData.like_count !== null) {
+            setLikeCount(newData.like_count);
           }
         }
       )
       .subscribe();
 
-    // Also poll periodically as backup (every 5 seconds)
+    // Poll periodically as backup
     const pollInterval = setInterval(() => {
-      fetchViewerCount();
+      fetchEventStats();
     }, 5000);
 
     return () => {
@@ -1696,9 +1699,15 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
         <h2 className="text-2xl font-bold">Live Streaming Studio</h2>
         <div className="text-gray-400 space-y-1">
           <p>Channel: {channelName}</p>
-          <div className="flex items-center space-x-2">
-            <Users className="h-5 w-5 text-purple-400" />
-            <p className="text-lg font-bold text-white">Viewers: {viewerCount}</p>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-purple-400" />
+              <p className="text-lg font-bold text-white">Viewers: {viewerCount}</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Heart className="h-5 w-5 text-pink-400" />
+              <p className="text-lg font-bold text-white">Likes: {likeCount}</p>
+            </div>
           </div>
           {streamingUid && <p>Streaming UID: {streamingUid}</p>}
         </div>
@@ -1759,6 +1768,17 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
                   <div>
                     <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-0.5">Viewers</p>
                     <p className="text-base font-bold text-white">{viewerCount}</p>
+                  </div>
+                </div>
+
+                {/* Likes Count (real-time from viewers) */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500/30 to-rose-500/30 border border-pink-500/50 flex items-center justify-center">
+                    <Heart className="h-5 w-5 text-pink-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-0.5">Likes</p>
+                    <p className="text-base font-bold text-white">{likeCount}</p>
                   </div>
                 </div>
               </div>
@@ -1826,6 +1846,21 @@ const AgoraStreamingStudio: React.FC<{ concert: any; supabase?: any; user?: any 
                   </div>
                 )}
               </div>
+              {/* Fullscreen: always-visible viewer count and total likes for streamer */}
+              {isFullscreen && isStreaming && (
+                <div className="absolute top-4 left-4 z-40 flex items-center gap-3 pointer-events-none">
+                  <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl">
+                    <Users className="h-5 w-5 text-purple-400 flex-shrink-0" />
+                    <span className="text-sm text-gray-300 uppercase tracking-wider font-semibold">Viewers</span>
+                    <span className="text-lg font-bold text-white tabular-nums">{viewerCount}</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 shadow-xl">
+                    <Heart className="h-5 w-5 text-pink-400 flex-shrink-0" />
+                    <span className="text-sm text-gray-300 uppercase tracking-wider font-semibold">Likes</span>
+                    <span className="text-lg font-bold text-white tabular-nums">{likeCount}</span>
+                  </div>
+                </div>
+              )}
               {/* Fullscreen overlay: Camera + Mic + Exit — visible on hover or click only */}
               {isFullscreen && cameraInitialized && localTracks && (
                 <div

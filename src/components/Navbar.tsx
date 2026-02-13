@@ -29,6 +29,8 @@ const Navbar: React.FC = () => {
   const artistToolsDropdownRef = useRef<HTMLDivElement>(null);
   const adminToolsDropdownRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuPanelRef = useRef<HTMLDivElement>(null);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -38,12 +40,14 @@ const Navbar: React.FC = () => {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
+      setShowMobileMenu(false);
       navigate(`/search?query=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
   const handleSearchKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
+      setShowMobileMenu(false);
       navigate(`/search?query=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
@@ -229,10 +233,10 @@ const Navbar: React.FC = () => {
     };
   }, [showMobileMenu]);
 
-  // Close dropdowns when clicking outside (click-only, no hover)
+  // Close dropdowns when clicking/touching outside (works for mobile touch)
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = (e.target as Node);
       if (categoriesDropdownRef.current && !categoriesDropdownRef.current.contains(target)) {
         setShowCategoriesDropdown(false);
       }
@@ -245,10 +249,22 @@ const Navbar: React.FC = () => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(target)) {
         setShowProfileMenu(false);
       }
+      // Close mobile menu when tapping/clicking outside the hamburger button and the menu panel
+      if (
+        showMobileMenu &&
+        !mobileMenuButtonRef.current?.contains(target) &&
+        !mobileMenuPanelRef.current?.contains(target)
+      ) {
+        setShowMobileMenu(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [showMobileMenu]);
 
   // Main navigation items (Help and Favorites moved to profile menu for smaller screens)
   const mainNavItems = [
@@ -293,7 +309,18 @@ const Navbar: React.FC = () => {
     { to: '/help-management', label: 'Help Management', icon: Settings }
   ] : [];
 
-  // Combine all nav items for mobile
+  // Mobile nav items in specified order: Home, Go Live, Schedule, Live Events, Upcoming Concert, Dashboard, Categories
+  const mobileNavItems = [
+    { to: '/', label: 'Home' },
+    ...(isArtist ? [{ to: '/go-live', label: 'Go Live', icon: Radio }] : []),
+    ...(isArtist || isAdmin || isSuperAdmin ? [{ to: '/schedule', label: 'Schedule', icon: Calendar }] : []),
+    { to: '/live-events', label: 'Live Events', icon: Radio },
+    { to: '/upcoming-concerts', label: 'Upcoming Concerts', icon: Calendar },
+    ...(isArtist ? [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
+    { to: '/categories', label: 'Categories' },
+    ...(adminNavItems.length > 0 ? adminNavItems : [])
+  ];
+  // For mobile: use ordered list; for other uses (e.g. future) keep combined items
   const allNavItems = [
     ...mainNavItems,
     ...(isArtist ? artistNavItems : []),
@@ -742,6 +769,7 @@ const Navbar: React.FC = () => {
 
             {/* Mobile Menu Button (xl so it shows when desktop nav is hidden, keeping right buttons visible) */}
             <button
+              ref={mobileMenuButtonRef}
               onClick={() => setShowMobileMenu(!showMobileMenu)}
               className="xl:hidden w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all duration-300 flex items-center justify-center group flex-shrink-0"
             >
@@ -754,7 +782,7 @@ const Navbar: React.FC = () => {
 
       {/* Mobile Navigation (xl so it matches hamburger visibility) */}
       {showMobileMenu && (
-        <div className="xl:hidden mt-4 py-4 border-t border-white/10 animate-in slide-in-from-top duration-300 px-4 bg-gradient-to-b from-gray-900/95 via-gray-900/90 to-gray-900/95 backdrop-blur-xl relative z-[60] max-h-[calc(100vh-80px)] overflow-y-auto">
+        <div ref={mobileMenuPanelRef} className="xl:hidden mt-4 py-4 border-t border-white/10 animate-in slide-in-from-top duration-300 px-4 bg-gradient-to-b from-gray-900/95 via-gray-900/90 to-gray-900/95 backdrop-blur-xl relative z-[60] max-h-[calc(100vh-80px)] overflow-y-auto">
           <div className="max-w-7xl mx-auto">
             <div className="flex flex-col space-y-4">
               {/* Mobile Search */}
@@ -778,7 +806,7 @@ const Navbar: React.FC = () => {
               )}
 
               {/* Mobile Nav Items */}
-              {allNavItems.map(item => (
+              {mobileNavItems.map(item => (
                 item.label === 'Categories' ? (
                   <div key={item.to} className="flex flex-col">
                     <Link

@@ -83,9 +83,13 @@ const FloatingActions: React.FC = () => {
     }
   };
 
-  // Hide on certain pages (like go-live)
-  const hideOnPages = ['/go-live'];
-  if (hideOnPages.includes(location.pathname)) {
+  // Hide on Watch, Streaming (streamer), and Go Live pages
+  const pathname = location.pathname;
+  const hideOnWatchOrStream =
+    pathname === '/go-live' ||
+    pathname.startsWith('/watch/') ||
+    pathname.startsWith('/stream/');
+  if (hideOnWatchOrStream) {
     return null;
   }
 

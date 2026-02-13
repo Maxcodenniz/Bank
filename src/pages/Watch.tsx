@@ -62,6 +62,9 @@ const Watch: React.FC = () => {
   const videoPlayerContainerRef = useRef<HTMLDivElement | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapRef = useRef<number | null>(null);
+  const viewerHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const VIEWER_SESSION_KEY = (eventId: string) => `dreemystar_vs_${eventId}`;
 
   // Detect mobile device
   useEffect(() => {
@@ -118,6 +121,7 @@ const Watch: React.FC = () => {
               price,
               image_url,
               viewer_count,
+              like_count,
               description,
               profiles:artist_id ( username, full_name )
             `
@@ -143,7 +147,14 @@ const Watch: React.FC = () => {
     fetchEvent();
   }, [id]);
 
-  // Check access for live stream: admins can always watch; others need an active ticket
+  // Check access for live stream: admins can always watch; others need an active ticket.
+  // Only re-run when access-relevant inputs change — NOT when event is updated from realtime
+  // (viewer_count, like_count), so we don't unmount the player and exit fullscreen.
+  const eventId = event?.id ?? null;
+  const eventStatus = event?.status ?? null;
+  const eventStartTime = event?.start_time ?? null;
+  const eventDuration = event?.duration ?? null;
+
   useEffect(() => {
     if (!event || !id) {
       setHasAccess(null);
@@ -188,7 +199,7 @@ const Watch: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [event, id, user?.id, user?.email, userProfile?.user_type, guestEmail]);
+  }, [id, eventId, eventStatus, eventStartTime, eventDuration, user?.id, user?.email, userProfile?.user_type, guestEmail]);
 
   // Subscribe to event updates
   useEffect(() => {
@@ -223,34 +234,129 @@ const Watch: React.FC = () => {
     setWatchUrl(`/watch/${event.id}`);
   }, [event, setStreamTitle, setWatchUrl]);
 
-  const handleViewerJoin = () => {
+  const handleViewerJoin = async () => {
     setIsViewerActive(true);
     setIsViewerStream(true);
     setIsStreaming(true);
     if (videoContainerRef.current) {
       setVideoElement(videoContainerRef.current);
     }
+    if (!event?.id) return;
+    const eventId = event.id;
+    try {
+      let deviceId = null;
+      try {
+        deviceId = sessionStorage.getItem(VIEWER_SESSION_KEY(eventId));
+      } catch (_) {}
+      if (!deviceId) {
+        deviceId = crypto.randomUUID?.() ?? `v-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        try {
+          sessionStorage.setItem(VIEWER_SESSION_KEY(eventId), deviceId);
+        } catch (_) {}
+      }
+      await supabase.from('viewer_sessions').upsert(
+        {
+          event_id: eventId,
+          device_id: deviceId,
+          user_id: user?.id ?? null,
+          last_seen: new Date().toISOString(),
+          is_active: true,
+        },
+        { onConflict: 'event_id,device_id' }
+      );
+      if (viewerHeartbeatRef.current) {
+        clearInterval(viewerHeartbeatRef.current);
+        viewerHeartbeatRef.current = null;
+      }
+      viewerHeartbeatRef.current = setInterval(async () => {
+        try {
+          const did = sessionStorage.getItem(VIEWER_SESSION_KEY(eventId));
+          if (did) {
+            await supabase
+              .from('viewer_sessions')
+              .update({ last_seen: new Date().toISOString() })
+              .eq('event_id', eventId)
+              .eq('device_id', did);
+          }
+        } catch (_) {}
+      }, 45_000);
+    } catch (err) {
+      console.warn('Viewer session join failed:', err);
+    }
   };
 
-  const handleViewerLeave = () => {
+  const handleViewerLeave = async () => {
     setIsViewerActive(false);
     setIsViewerStream(false);
     setIsStreaming(false);
     setVideoElement(null);
+    if (viewerHeartbeatRef.current) {
+      clearInterval(viewerHeartbeatRef.current);
+      viewerHeartbeatRef.current = null;
+    }
+    if (!event?.id) return;
+    const eventId = event.id;
+    try {
+      const deviceId = sessionStorage.getItem(VIEWER_SESSION_KEY(eventId));
+      if (deviceId) {
+        await supabase
+          .from('viewer_sessions')
+          .update({ is_active: false, left_at: new Date().toISOString() })
+          .eq('event_id', eventId)
+          .eq('device_id', deviceId);
+        try {
+          sessionStorage.removeItem(VIEWER_SESSION_KEY(eventId));
+        } catch (_) {}
+      }
+    } catch (err) {
+      console.warn('Viewer session leave failed:', err);
+    }
   };
 
   const triggerLike = async () => {
     if (!event) return;
     setShowLikeBurst(true);
     setTimeout(() => setShowLikeBurst(false), 500);
+    // Optimistic local update; realtime subscription will broadcast authoritative count to all clients
     setLikeCount((prev) => prev + 1);
 
     try {
       await supabase.rpc('increment_event_like_count', { event_id: event.id });
+      // If RPC fails, realtime may not fire; refetch so we stay in sync
     } catch (err) {
       console.warn('Failed to register like:', err);
+      const { data } = await supabase.from('events').select('like_count').eq('id', event.id).single();
+      if (data?.like_count != null) setLikeCount(data.like_count);
     }
   };
+
+  // On unmount or route change, mark viewer session as left so count updates
+  useEffect(() => {
+    const eventId = id ?? null;
+    return () => {
+      if (viewerHeartbeatRef.current) {
+        clearInterval(viewerHeartbeatRef.current);
+        viewerHeartbeatRef.current = null;
+      }
+      if (!eventId) return;
+      try {
+        const deviceId = sessionStorage.getItem(VIEWER_SESSION_KEY(eventId));
+        if (deviceId) {
+          supabase
+            .from('viewer_sessions')
+            .update({ is_active: false, left_at: new Date().toISOString() })
+            .eq('event_id', eventId)
+            .eq('device_id', deviceId)
+            .then(() => {
+              try {
+                sessionStorage.removeItem(VIEWER_SESSION_KEY(eventId));
+              } catch (_) {}
+            })
+            .catch(() => {});
+        }
+      } catch (_) {}
+    };
+  }, [id]);
 
   const handleViewerTap = () => {
     if (!isMobile) return;
@@ -320,6 +426,17 @@ const Watch: React.FC = () => {
     } catch (err) {
       console.warn('Fullscreen failed:', err);
     }
+  };
+
+  const handleQuitClick = async () => {
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    setShowQuitConfirm(true);
   };
 
   useEffect(() => {
@@ -604,7 +721,7 @@ const Watch: React.FC = () => {
                           {isFullscreen ? <Minimize className="h-5 w-5 md:h-6 md:w-6 text-white" /> : <Maximize className="h-5 w-5 md:h-6 md:w-6 text-white" />}
                         </button>
                         <button
-                          onClick={() => setShowQuitConfirm(true)}
+                          onClick={handleQuitClick}
                           className="bg-gradient-to-r from-red-600 via-red-600 to-red-700 hover:from-red-700 hover:via-red-700 hover:to-red-800 text-white px-3 py-2 rounded-lg shadow-lg flex items-center space-x-1 transition-all duration-300 font-semibold text-xs md:text-sm"
                           title="Quit and leave this page"
                           type="button"
